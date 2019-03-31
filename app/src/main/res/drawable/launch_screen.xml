@@ -9,7 +9,7 @@
     <item>
 
         <bitmap
-            android:src="@drawable/uslce_splash"
+            android:src="@drawable/new_promo_1024"
             android:gravity="center"/>
 
     </item>

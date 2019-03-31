@@ -4,7 +4,7 @@
 
     <application
         android:allowBackup="true"
-        android:icon="@drawable/stlouis"
+        android:icon="@drawable/icon"
         android:label="@string/app_name">
         <activity
             android:name=".FullscreenActivity"
