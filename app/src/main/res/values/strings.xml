@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+  <string name="app_name">USL:CE 090</string>
+
+  <string name="url_begin">http://uslce.games.ziquid.com/stlouis/bounce/</string>
+  <string name="url_home">http://uslce.games.ziquid.com/stlouis/home/</string>
+
+  <string name="url_purchase">http://uslce.games.ziquid.com/stlouis/elders_do_purchase/</string>
+  <string name="url_profile">http://uslce.games.ziquid.com/stlouis/user/</string>
+  
+  <string name="billing_not_supported_title">Can\'t make purchases</string>
+  <string name="billing_not_supported_message">The Market billing
+   service is not available at this time.  You can continue to use this app but you
+   won\'t be able to make purchases.</string>
+  <string name="cannot_connect_title">Can\'t connect to Market</string>
+  <string name="cannot_connect_message">This app cannot connect to Market.
+   Your version of Market may be out of date.
+   You can continue to use this app but you
+   won\'t be able to make purchases.</string>
+  
+  <string name="msg_ok">OK</string>
+      
+</resources>
