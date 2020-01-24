@@ -3,13 +3,13 @@
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- The background color, preferably the same as your normal theme -->
-    <item android:drawable="@android:color/white"/>
+    <item android:drawable="@android:color/holo_green_dark"/>
 
     <!-- Your product logo - 144dp color version of your app icon -->
     <item>
 
         <bitmap
-            android:src="@drawable/new_promo_1024"
+            android:src="@drawable/uslce_094_1024"
             android:gravity="center"/>
 
     </item>

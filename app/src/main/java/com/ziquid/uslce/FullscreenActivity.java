@@ -1,10 +1,10 @@
 package com.ziquid.uslce;
 
+import java.io.IOException;
 import java.util.Random;
 import java.util.UUID;
 
 import android.annotation.SuppressLint;
-import android.app.ActionBar;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
@@ -14,9 +14,9 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 
-import android.content.res.Resources;
 import android.graphics.Point;
-import android.graphics.drawable.Drawable;
+import android.media.AudioManager;
+import android.media.MediaPlayer;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -29,16 +29,15 @@ import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.Display;
 import android.view.KeyEvent;
-import android.view.Menu;
-import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.Window;
 import android.view.WindowManager;
+import android.webkit.ValueCallback;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.Toast;
 
 import com.ziquid.iap.BillingService;
 import com.ziquid.iap.PurchaseObserver;
@@ -50,34 +49,36 @@ import com.ziquid.iap.Consts.ResponseCode;
 
 public class FullscreenActivity extends Activity {
     
-    private WebView engine;
-    private String androidID, usableWidth = "320", usableHeight = "480",
-    	billingSupportString = "; GoogleIAP", authKey = "",
-    	authKeySupportString = "";
-    public static String TAG = "uslce";
+  private WebView engine;
+  private String androidID, usableWidth = "320", usableHeight = "480",
+    billingSupportString = "; GoogleIAP", authKey = "",
+    authKeySupportString = "";
+  public static String TAG = "uslce";
+
+  private static final Random RNG = new Random();
+
+  private PackageInfo pInfo = null;
+
+  private MyPurchaseObserver mMyPurchaseObserver;
+  private Handler mHandler;
+  private BillingService mBillingService;
     
-    private static final Random RNG = new Random();
-    
-    private PackageInfo pInfo = null;
-    
-    private MyPurchaseObserver mMyPurchaseObserver;
-    private Handler mHandler;
-    private BillingService mBillingService;
-    
-//    private LinearLayout mLinearLayout;
   private ImageView splashImage;
+  private LinearLayout splashScreenLayout;
   private Runnable removeSplash;
   private Handler splashHandler;
   private Point screenSize = new Point();
+  private MediaPlayer mPlayer;
 
-	@SuppressLint("SetJavaScriptEnabled")
+  @SuppressLint("SetJavaScriptEnabled")
 	@Override
-    public void onCreate(Bundle savedInstanceState) {
+  public void onCreate(Bundle savedInstanceState) {
       setTheme(R.style.FullscreenTheme);
       super.onCreate(savedInstanceState);
 //      Context mContext = getApplicationContext();
       setContentView(R.layout.activity_fullscreen);
-      splashImage = (ImageView) findViewById(R.id.splashImageView);
+//      splashImage = (ImageView) findViewById(R.id.splashImageView);
+      splashScreenLayout = (LinearLayout) findViewById(R.id.splashScreenLayout);
 
     //   Hide the status and action bars.
       final View decorView = getWindow().getDecorView();
@@ -86,9 +87,10 @@ public class FullscreenActivity extends Activity {
         | View.SYSTEM_UI_FLAG_IMMERSIVE;
 //        | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
       decorView.setSystemUiVisibility(uiOptions);
-      ActionBar actionBar = getActionBar();
-      actionBar.hide();
+//      ActionBar actionBar = getActionBar();
+//      actionBar.hide();
 
+//      this.playMusic();
 
       engine = (WebView) findViewById(R.id.browser);
       engine.clearCache(true); // start by clearing the cache
@@ -208,7 +210,7 @@ public class FullscreenActivity extends Activity {
             ViewGroup fullscreenViewGroup = (ViewGroup) decorView.findViewById(R.id.fullscreenLayout);
             TransitionManager.beginDelayedTransition(fullscreenViewGroup);
           }
-          splashImage.setVisibility(View.GONE);
+          splashScreenLayout.setVisibility(View.GONE);
         }
 
       };
@@ -217,47 +219,38 @@ public class FullscreenActivity extends Activity {
       splashHandler.postDelayed(removeSplash, 3000);
     }
 
-
-    
-    @Override
-    protected void onStart() {
-    	super.onStart();
-    	ResponseHandler.register(mMyPurchaseObserver);
+  @Override
+  protected void onStart() {
+    super.onStart();
+    ResponseHandler.register(mMyPurchaseObserver);
 	}
-
 
 	@Override
 	protected void onStop() {
-	    super.onStop();
-	    ResponseHandler.unregister(mMyPurchaseObserver);
+    super.onStop();
+    ResponseHandler.unregister(mMyPurchaseObserver);
 	}
-	
 	
 	@Override
 	protected void onDestroy() {
-	    super.onDestroy();
-	    mBillingService.unbind();
+    super.onDestroy();
+    mBillingService.unbind();
 	}
     
-    @Override
-    public boolean onKeyDown(int keyCode, KeyEvent event) {
-    	
-        if ((keyCode == KeyEvent.KEYCODE_BACK) && engine.canGoBack() &&
-    		!engine.getUrl().equals(getString(R.string.url_home) + androidID)) {
-        	
-        	engine.clearHistory();
-        	engine.loadUrl(getString(R.string.url_home) + androidID);
-//        	engine.clearHistory();
-        	
-            return true;
-        }
+  @Override
+  public boolean onKeyDown(int keyCode, KeyEvent event) {
 
-        return super.onKeyDown(keyCode, event);
+    if ((keyCode == KeyEvent.KEYCODE_BACK) && engine.canGoBack() &&
+    !engine.getUrl().equals(getString(R.string.url_home) + androidID)) {
+      engine.clearHistory();
+      engine.loadUrl(getString(R.string.url_home) + androidID);
+      return true;
+    }
+
+    return super.onKeyDown(keyCode, event);
+  } // onKeyDown
     
-    } // onKeyDown
-    
-    
-    public String getIMEI() {
+  public String getIMEI() {
     	
     	String imei = "000000000000000";
     	String fakeIMEIPrefix = "sdk+";
@@ -323,81 +316,89 @@ public class FullscreenActivity extends Activity {
         return imei;
 
     }
-    
-    
-   public String getAuthKey() {
+
+  public String getAuthKey() {
     	
-    	String authKey = "000000000000000";
+    String authKey;
+    SharedPreferences settings;
+    SharedPreferences.Editor settings_editor;
 
-    	SharedPreferences settings;
-        SharedPreferences.Editor settings_editor;
-    	        	
-       	settings = getSharedPreferences(TAG, MODE_PRIVATE);
-       	authKey = settings.getString("auth-key", "000000000000000");
-            
-        if (authKey.equals("000000000000000")) {
-            
-           	Log.d(TAG, "No saved authKey; generating one ...");
-            	
-           	authKey = UUID.randomUUID().toString();
-           	settings_editor = settings.edit();
-           	settings_editor.putString("auth-key", authKey);
-           	settings_editor.commit();
-           	Log.i(TAG, "created authKey of " + authKey);
-           
-        } else {
-            
-           	Log.i(TAG, "found existing authKey of " + authKey);
-            
-        }
-        
-        Log.i(TAG, "authKey is " + authKey);
-        return authKey;
+    settings = getSharedPreferences(TAG, MODE_PRIVATE);
+    authKey = settings.getString("auth-key", "000000000000000");
 
+    if (authKey.equals("000000000000000")) {
+
+      Log.d(TAG, "No saved authKey; generating one ...");
+
+      authKey = UUID.randomUUID().toString();
+      settings_editor = settings.edit();
+      settings_editor.putString("auth-key", authKey);
+      settings_editor.commit();
+      Log.i(TAG, "created authKey of " + authKey);
     }
-    
-    
-    private DialogInterface.OnClickListener okListener(DialogInterface dialog,
-    		int which) {
-        	return null;
+    else {
+      Log.i(TAG, "found existing authKey of " + authKey);
     }
 
-        
-    @SuppressWarnings("unused")
-    private void showPopUp(String Text) {
-        
-    	new AlertDialog.Builder(this)
-			.setMessage(Text)
-			.setPositiveButton(getString(R.string.msg_ok), okListener(null, 0))
-			.show();
-    	
+    return authKey;
+  }
+    
+  private DialogInterface.OnClickListener okListener(DialogInterface dialog,
+    int which) {
+    return null;
+  }
+
+  @SuppressWarnings("unused")
+  private void showPopUp(String Text) {
+    new AlertDialog.Builder(this)
+    .setMessage(Text)
+    .setPositiveButton(getString(R.string.msg_ok), okListener(null, 0))
+    .show();
+  }
+
+  private void showPopUp(Integer Text) {
+    this.showPopUp(Text.toString());
+  }
+
+  private void playMusic() {
+    String url = "http://android.programmerguru.com/wp-content/uploads/2013/04/hosannatelugu.mp3";
+
+    mPlayer = new MediaPlayer();
+    mPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
+    try {
+      mPlayer.setDataSource(url);
+    } catch (IllegalArgumentException e) {
+      Toast.makeText(getApplicationContext(), "You might not set the URI correctly!", Toast.LENGTH_LONG).show();
+    } catch (SecurityException e) {
+      Toast.makeText(getApplicationContext(), "You might not set the URI correctly!", Toast.LENGTH_LONG).show();
+    } catch (IllegalStateException e) {
+      Toast.makeText(getApplicationContext(), "You might not set the URI correctly!", Toast.LENGTH_LONG).show();
+    } catch (IOException e) {
+      e.printStackTrace();
     }
-    
-    
-    private void showPopUp(Integer Text) {
-        
-    	new AlertDialog.Builder(this)
-			.setMessage(Text)
-			.setPositiveButton(getString(R.string.msg_ok), okListener(null, 0))
-			.show();
-    	
+    try {
+      mPlayer.prepare();
+    } catch (IllegalStateException e) {
+      Toast.makeText(getApplicationContext(), "You might not set the URI correctly!", Toast.LENGTH_LONG).show();
+    } catch (IOException e) {
+      Toast.makeText(getApplicationContext(), "You might not set the URI correctly!", Toast.LENGTH_LONG).show();
     }
+    mPlayer.start();
+  }
     
     
-    private void buyLuck(String sku) {
-    	
-        if (mBillingService.requestPurchase(sku, androidID)) {
+  private void buyLuck(String sku) {
+    if (mBillingService.requestPurchase(sku, androidID)) {
 //        	showPopUp("you just bought luck!");
 //        	String response = downloadString(getString(R.string.url_purchase) +
 //    			androidID +	'/' + sku);
-        	engine.loadUrl(getString(R.string.url_home) + androidID);
-        }
-        else {
-        	showPopUp(R.string.billing_not_supported_message);
-        }
-        
+      engine.loadUrl(getString(R.string.url_home) + androidID);
     }
-    
+    else {
+      showPopUp(R.string.billing_not_supported_message);
+    }
+  }
+
     
 //    private String downloadString(String fileUrl) {
 //    	
@@ -434,45 +435,49 @@ public class FullscreenActivity extends Activity {
 //    }
     
     
-    private class MyWebViewClient extends WebViewClient {
-    	
-        @Override
-        public boolean shouldOverrideUrlLoading(WebView view, String url) {
-Log.d(TAG, "url is " + url);
-//          int uiOptions = View.SYSTEM_UI_FLAG_FULLSCREEN
-//            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION;
-//          view.setSystemUiVisibility(uiOptions);
-//          ActionBar actionBar = getActionBar();
-//          actionBar.hide();
-        	if (url.startsWith("iap://")) {
+  private class MyWebViewClient extends WebViewClient {
+
+    @Override
+    public boolean shouldOverrideUrlLoading(WebView view, String url) {
+      Log.d(TAG, "url is " + url);
+      if (url.startsWith("iap://")) {
 //        		showPopUp("in app purchase!");
-        		buyLuck(url.substring(6));
-        		return true;
-        	}
-        	else if (url.startsWith("external://")) {
-        	  String fixedUrl = url.replace("external://", "http://");
-            Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(fixedUrl));
-            startActivity(i);
-            return true;
-          }
-        	else {
-        		view.loadUrl(url);
-        		return true;
-//            return false;
-        	}
-            
-        }
-        
+        buyLuck(url.substring(6));
+        return true;
+      }
+      else if (url.startsWith("external://")) {
+        String fixedUrl = url.replace("external://", "http://");
+        Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(fixedUrl));
+        startActivity(i);
+        return true;
+      }
+      else {
+        view.loadUrl(url);
+        return true;
+      }
     }
-    
+
+    @Override
+    public void onPageFinished(WebView view, String url) {
+      Log.d(TAG, "page has finished loading for URL " + url);
+      super.onPageFinished(view, url);
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+        view.evaluateJavascript("(function() { return 'this'; })();", new ValueCallback<String>() {
+          @Override
+          public void onReceiveValue(String s) {
+            Log.d(TAG, s); // Prints: "this"
+          }
+        });
+      }
+    }
+
+  }
 }
 
-
 /**
-* A {@link PurchaseObserver} is used to get callbacks when Android Market sends
-* messages to this application so that we can update the UI.
-*/
-
+ * A {@link PurchaseObserver} is used to get callbacks when Android Market sends
+ * messages to this application so that we can update the UI.
+ */
 class MyPurchaseObserver extends PurchaseObserver {
 	
 	String TAG = "MyPurchaseObserver";
