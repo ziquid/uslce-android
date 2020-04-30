@@ -12,7 +12,7 @@
     <style name="FullscreenTheme.Launcher" parent="FullscreenTheme">
         <item name="android:windowBackground">@drawable/launch_screen</item>
         <item name="android:windowActionBarOverlay">false</item>
-        <item name="metaButtonBarStyle"></item>
+        <item name="metaButtonBarStyle">?android:attr/buttonBarStyle</item>
         <item name="metaButtonBarButtonStyle">
             ?android:attr/buttonBarButtonStyle
         </item>

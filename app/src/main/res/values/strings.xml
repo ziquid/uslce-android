@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-  <string name="app_name">USL:CE 095</string>
+  <string name="app_name">USL:CE 097</string>
 
   <string name="url_begin">http://uslce.games.ziquid.com/stlouis/bounce/</string>
+  <string name="url_begin_landscape">http://uslce.games.ziquid.com/usl_esa/bounce/</string>
   <string name="url_home">http://uslce.games.ziquid.com/stlouis/home/</string>
 
   <string name="url_purchase">http://uslce.games.ziquid.com/stlouis/elders_do_purchase/</string>
@@ -20,7 +21,7 @@
    won\'t be able to make purchases.</string>
   
   <string name="msg_ok">OK</string>
-    <string name="tip_of_the_day">Do not play Uprising: St. Louis while trespassing.</string>
-    <string name="splashscreen">splashscreen</string>
+  <string name="tip_of_the_day">Do not play Uprising: St. Louis while trespassing.</string>
+  <string name="splashscreen">splashscreen</string>
 
 </resources>

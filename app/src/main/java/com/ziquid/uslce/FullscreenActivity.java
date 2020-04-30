@@ -1,7 +1,19 @@
 package com.ziquid.uslce;
 
+import java.io.BufferedInputStream;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLConnection;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Random;
+import java.util.Scanner;
 import java.util.UUID;
 
 import android.annotation.SuppressLint;
@@ -14,11 +26,14 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 
+import android.content.res.Configuration;
 import android.graphics.Point;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
+import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 
 import android.net.Uri;
@@ -37,7 +52,6 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.Toast;
 
 import com.ziquid.iap.BillingService;
 import com.ziquid.iap.PurchaseObserver;
@@ -52,7 +66,7 @@ public class FullscreenActivity extends Activity {
   private WebView engine;
   private String androidID, usableWidth = "320", usableHeight = "480",
     billingSupportString = "; GoogleIAP", authKey = "",
-    authKeySupportString = "";
+    authKeySupportString = "", screenOrientation = "";
   public static String TAG = "uslce";
 
   private static final Random RNG = new Random();
@@ -63,161 +77,161 @@ public class FullscreenActivity extends Activity {
   private Handler mHandler;
   private BillingService mBillingService;
     
-  private ImageView splashImage;
+  public Context mContext;
+  public File musicDlDir;
   private LinearLayout splashScreenLayout;
   private Runnable removeSplash;
   private Handler splashHandler;
   private Point screenSize = new Point();
-  private MediaPlayer mPlayer;
+  private static MediaPlayer mPlayer;
 
   @SuppressLint("SetJavaScriptEnabled")
 	@Override
   public void onCreate(Bundle savedInstanceState) {
-      setTheme(R.style.FullscreenTheme);
-      super.onCreate(savedInstanceState);
-//      Context mContext = getApplicationContext();
-      setContentView(R.layout.activity_fullscreen);
-//      splashImage = (ImageView) findViewById(R.id.splashImageView);
-      splashScreenLayout = (LinearLayout) findViewById(R.id.splashScreenLayout);
+    mContext = getBaseContext();
+    setTheme(R.style.FullscreenTheme);
+    super.onCreate(savedInstanceState);
+    setContentView(R.layout.activity_fullscreen);
+    splashScreenLayout = findViewById(R.id.splashScreenLayout);
 
-    //   Hide the status and action bars.
-      final View decorView = getWindow().getDecorView();
-      int uiOptions = View.SYSTEM_UI_FLAG_FULLSCREEN
-        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-        | View.SYSTEM_UI_FLAG_IMMERSIVE;
+    // Hide the status and action bars.
+    final View decorView = getWindow().getDecorView();
+    int uiOptions = View.SYSTEM_UI_FLAG_FULLSCREEN
+      | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+      | View.SYSTEM_UI_FLAG_IMMERSIVE;
 //        | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
-      decorView.setSystemUiVisibility(uiOptions);
+    decorView.setSystemUiVisibility(uiOptions);
 //      ActionBar actionBar = getActionBar();
 //      actionBar.hide();
 
-//      this.playMusic();
-
-      engine = (WebView) findViewById(R.id.browser);
-      engine.clearCache(true); // start by clearing the cache
-
-      androidID = System.getString(this.getContentResolver(), System.ANDROID_ID);
-      Log.i(TAG, "androidID is " + androidID);
-        
-    	if (android.os.Build.MODEL.equalsIgnoreCase("NookColor")) {
-        	androidID = "nkc+" + androidID;
-        	Log.i(TAG, "because this is a nook color and I can't change " +
-        		"the UserAgent, androidID is now " + androidID);
-    	}
-            
-      try { // sometimes androidID can't be compared, so wrap in try/catch
-
-        if (androidID.equals("null") || androidID.equals("9774d56d682e549c")) {
-          Log.i(TAG, "invalid androidID!  Trying IMEI...");
-          androidID = getIMEI(); // hack for sdk and broken phones
-          Log.i(TAG, "because my androidID is not valid, I am now using " +
-            "an IMEI of " + androidID);
-        }
-
-      } catch (Exception e) {
-        androidID = getIMEI(); // lame java workaround for hack for sdk and broken phones
-        Log.i(TAG, "because my androidID is not valid, I am now using " +
-            "an IMEI of " + androidID);
-      }
-
-      authKey = getAuthKey();
-      authKeySupportString = "; authKey=" + authKey;
-
-      // set up IAPs.
-      mHandler = new Handler();
-      mMyPurchaseObserver = new MyPurchaseObserver(this, mHandler);
-      mBillingService = new BillingService();
-      mBillingService.setContext(this);
-
-      // Check if billing is supported.
-      ResponseHandler.register(mMyPurchaseObserver);
-
-      if (!mBillingService.checkBillingSupported()) {
-        billingSupportString = "";
-        Log.i(TAG, "Uhoh!  Billing isn't supported!");
-      }
-      else {
-        Log.i(TAG, "Billing supported.");
-      }
-
-      // Set up the Web Engine.
-      engine.getSettings().setJavaScriptEnabled(true);
-
-      // Get usable width -- normal is 320.
-      Display display = ((WindowManager)
-        getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay();
-      display.getSize(screenSize);
-      int screenWidth = screenSize.x;
-      int screenHeight = screenSize.y;
-
-      Log.d(TAG, "screen width is " + Integer.toString(screenWidth) +
-        " and height is " + screenHeight);
-
-      // Android tries to auto-adjust images for a specific screen density.
-      // We don't want that to happen, so we give it a width we know it will
-      // turn into the correct width we want.
-      DisplayMetrics metrics = new DisplayMetrics();
-      display.getMetrics(metrics);
-      float screenDensity = metrics.density;
-
-      String density = Float.toString(screenDensity);
-      Log.d(TAG, "screen density is " + density);
-        
-      usableWidth = Integer.toString((int) (screenWidth / screenDensity));
-      usableHeight = Integer.toString((int) (screenHeight / screenDensity));
-        
-      try {
-        pInfo = getPackageManager().getPackageInfo("com.ziquid.uslce",
-        PackageManager.GET_META_DATA);
-        engine.getSettings().setUserAgentString(
-          engine.getSettings().getUserAgentString() + " (" +
-          pInfo.packageName + "; Android/" + pInfo.versionName + '/' +
-          pInfo.versionCode + "; width=" + usableWidth + "; height=" +
-          usableHeight + billingSupportString + authKeySupportString +
-          ')');
-      }
-      catch (Exception e) {
-        engine.getSettings().setUserAgentString(
-          engine.getSettings().getUserAgentString() +
-          " (com.ziquid.uslce; Android/Unknown/Unknown; " +
-          billingSupportString + ')');
-      }
-      Log.d(TAG, "User agent set to " + engine.getSettings().getUserAgentString());
-
-      engine.setWebViewClient(new MyWebViewClient());
-
-      String data = "<html>" +
-        "<head><meta http-equiv=\"refresh\"" +
-        " content=\"1;url=" + getString(R.string.url_begin) +
-        androidID + "\"/></head> " +
-          "<body style=\"margin: 0px; padding: 0px; background-color: black; " +
-//          "color: white;\"><span style=\"display: block; vertical-align: middle;\">" +
-        "color: white;\"><span style=\"display: none; vertical-align: middle;\">" +
-        "<img width=\"" + usableWidth + "\" style=\"display: inline-block;\" " +
-        "src=\"file:///drawable/uslce_splash.jpg\"></span></body>" +
-          "</html>";
-        
-        // splashScreen.setVisibility(View.GONE);
-
-//        engine.loadDataWithBaseURL("Fake://url.com/", data, "text/html",
-//        	"UTF-8", "");
-        engine.loadUrl(getString(R.string.url_begin) + androidID);
-
-      // Remove the splashscreen.
-      removeSplash = new Runnable() {
-
-        public void run() {
-          if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-            ViewGroup fullscreenViewGroup = (ViewGroup) decorView.findViewById(R.id.fullscreenLayout);
-            TransitionManager.beginDelayedTransition(fullscreenViewGroup);
-          }
-          splashScreenLayout.setVisibility(View.GONE);
-        }
-
-      };
-
-      splashHandler = new Handler();
-      splashHandler.postDelayed(removeSplash, 3000);
+    musicDlDir = mContext.getExternalFilesDir(Environment.DIRECTORY_MUSIC);
+    Log.d(TAG, "music DL dir is " + musicDlDir.toString());
+    if (!musicDlDir.exists()) {
+      musicDlDir.mkdir();
     }
+
+    engine = (WebView) findViewById(R.id.browser);
+    engine.clearCache(true); // start by clearing the cache
+
+    androidID = System.getString(this.getContentResolver(), System.ANDROID_ID);
+    Log.i(TAG, "androidID is " + androidID);
+
+    if (android.os.Build.MODEL.equalsIgnoreCase("NookColor")) {
+        androidID = "nkc+" + androidID;
+        Log.i(TAG, "because this is a nook color and I can't change " +
+          "the UserAgent, androidID is now " + androidID);
+    }
+
+    // Sometimes androidID can't be compared, so wrap in try/catch.
+    try {
+      if (androidID.equals("null") || androidID.equals("9774d56d682e549c")) {
+        Log.i(TAG, "invalid androidID!  Trying IMEI...");
+        androidID = getIMEI(); // hack for sdk and broken phones
+        Log.i(TAG, "because my androidID is not valid, I am now using " +
+          "an IMEI of " + androidID);
+      }
+    }
+    catch (Exception e) {
+      // Lame java workaround for hack for sdk and broken phones.
+      androidID = getIMEI();
+      Log.i(TAG, "because my androidID is not valid, I am now using " +
+          "an IMEI of " + androidID);
+    }
+
+    authKey = getAuthKey();
+    authKeySupportString = "; authKey=" + authKey;
+
+    // Set up IAPs.
+    mHandler = new Handler();
+    mMyPurchaseObserver = new MyPurchaseObserver(this, mHandler);
+    mBillingService = new BillingService();
+    mBillingService.setContext(this);
+
+    // Check if billing is supported.
+    ResponseHandler.register(mMyPurchaseObserver);
+
+    if (!mBillingService.checkBillingSupported()) {
+      billingSupportString = "";
+      Log.i(TAG, "Uhoh!  Billing isn't supported!");
+    }
+    else {
+      Log.i(TAG, "Billing supported.");
+    }
+
+    // Set up the Web Engine.
+    engine.getSettings().setJavaScriptEnabled(true);
+
+    // Get usable width -- normal is 320.
+    Display display = ((WindowManager)
+      getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay();
+    display.getSize(screenSize);
+    int screenWidth = screenSize.x;
+    int screenHeight = screenSize.y;
+
+    Log.d(TAG, "screen width is " + screenWidth +
+      " and height is " + screenHeight);
+
+    // Android tries to auto-adjust images for a specific screen density.
+    // We don't want that to happen, so we give it a width we know it will
+    // turn into the correct width we want.
+    DisplayMetrics metrics = new DisplayMetrics();
+    display.getMetrics(metrics);
+    float screenDensity = metrics.density;
+
+    String density = Float.toString(screenDensity);
+    Log.d(TAG, "screen density is " + density);
+
+    usableWidth = Integer.toString((int) (screenWidth / screenDensity));
+    usableHeight = Integer.toString((int) (screenHeight / screenDensity));
+    Log.d(TAG, "usable width and height are " + usableWidth + ", " + usableHeight);
+
+    if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
+      screenOrientation = "landscape";
+    }
+    else {
+      screenOrientation = "portrait";
+    }
+    Log.d(TAG, "screen orientation is " + screenOrientation);
+
+    try {
+      pInfo = getPackageManager().getPackageInfo("com.ziquid.uslce",
+      PackageManager.GET_META_DATA);
+      engine.getSettings().setUserAgentString(
+        engine.getSettings().getUserAgentString() + " (" +
+        pInfo.packageName + "; Android/" + pInfo.versionName + '/' +
+        pInfo.versionCode + "; width=" + usableWidth + "; height=" +
+        usableHeight + "; orientation=" + screenOrientation +
+        billingSupportString + authKeySupportString + ')'
+      );
+    }
+    catch (Exception e) {
+      engine.getSettings().setUserAgentString(
+        engine.getSettings().getUserAgentString() +
+        " (com.ziquid.uslce; Android/Unknown/Unknown; " +
+        billingSupportString + ')');
+    }
+    Log.d(TAG, "User agent set to " + engine.getSettings().getUserAgentString());
+
+    engine.setWebViewClient(new MyWebViewClient());
+    if (screenOrientation == "landscape") {
+      engine.loadUrl(getString(R.string.url_begin_landscape) + androidID);
+    }
+    else {
+      engine.loadUrl(getString(R.string.url_begin) + androidID);
+    }
+
+    // Remove the splashscreen.
+    removeSplash = new Runnable() {
+      public void run() {
+        ViewGroup fullscreenViewGroup = (ViewGroup) decorView.findViewById(R.id.fullscreenLayout);
+        TransitionManager.beginDelayedTransition(fullscreenViewGroup);
+        splashScreenLayout.setVisibility(View.GONE);
+      }
+    };
+
+    splashHandler = new Handler();
+    splashHandler.postDelayed(removeSplash, 3000);
+  }
 
   @Override
   protected void onStart() {
@@ -248,7 +262,7 @@ public class FullscreenActivity extends Activity {
     }
 
     return super.onKeyDown(keyCode, event);
-  } // onKeyDown
+  }
     
   public String getIMEI() {
     	
@@ -342,7 +356,7 @@ public class FullscreenActivity extends Activity {
 
     return authKey;
   }
-    
+
   private DialogInterface.OnClickListener okListener(DialogInterface dialog,
     int which) {
     return null;
@@ -360,32 +374,93 @@ public class FullscreenActivity extends Activity {
     this.showPopUp(Text.toString());
   }
 
-  private void playMusic() {
-    String url = "http://android.programmerguru.com/wp-content/uploads/2013/04/hosannatelugu.mp3";
+  private void playMusic(String url) {
+    Log.d(TAG, "Attempting to play " + url);
+    String musicFilename = getDlFileName(musicDlDir.getPath(), url);
+    Log.d(TAG, "Music filename is " + musicFilename);
+    File musicFile = new File(musicFilename);
+    if (musicFile.canRead()) {
+      playLocalMusic(musicFilename);
+    }
+    else {
+      new DownloadFileAsync().execute(musicDlDir.getPath(), url);
+    }
+
+//    mPlayer = new MediaPlayer();
+//    mPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
+//
+//    try {
+//      mPlayer.setDataSource(url);
+//    } catch (IllegalArgumentException | SecurityException | IllegalStateException e) {
+//      Log.e(TAG, "Invalid music URL? " + url);
+//    } catch (IOException e) {
+//      Log.e(TAG, "Could not download music URL " + url);
+//    }
+//
+//    try {
+//      mPlayer.prepareAsync();
+//    } catch (IllegalStateException e) {
+//      Log.e(TAG, "Invalid music URL? " + url);
+//    }
+//
+//    mPlayer.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
+//      @Override
+//      public void onPrepared(MediaPlayer mp) {
+//        Log.d(TAG, "Starting playback!");
+//        mp.start();
+//      }
+//    });
+//
+//    mPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+//      @Override
+//      public void onCompletion(MediaPlayer mp) {
+//        Log.d(TAG, "Stopping playback!");
+//        mp.stop();
+//        mp.release();
+//      }
+//    });
+  }
+
+  private static void playLocalMusic(String url) {
+    Log.d(TAG, "Attempting to play local file " + url);
 
     mPlayer = new MediaPlayer();
     mPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
+
     try {
       mPlayer.setDataSource(url);
-    } catch (IllegalArgumentException e) {
-      Toast.makeText(getApplicationContext(), "You might not set the URI correctly!", Toast.LENGTH_LONG).show();
-    } catch (SecurityException e) {
-      Toast.makeText(getApplicationContext(), "You might not set the URI correctly!", Toast.LENGTH_LONG).show();
-    } catch (IllegalStateException e) {
-      Toast.makeText(getApplicationContext(), "You might not set the URI correctly!", Toast.LENGTH_LONG).show();
-    } catch (IOException e) {
-      e.printStackTrace();
     }
+    catch (IllegalArgumentException | SecurityException | IllegalStateException e) {
+      Log.e(TAG, "Invalid music file? " + url);
+    }
+    catch (IOException e) {
+      Log.e(TAG, "Could not access music file " + url);
+    }
+
     try {
       mPlayer.prepare();
-    } catch (IllegalStateException e) {
-      Toast.makeText(getApplicationContext(), "You might not set the URI correctly!", Toast.LENGTH_LONG).show();
-    } catch (IOException e) {
-      Toast.makeText(getApplicationContext(), "You might not set the URI correctly!", Toast.LENGTH_LONG).show();
     }
+    catch (IllegalStateException e) {
+      Log.e(TAG, "music player in illegal state!");
+      e.printStackTrace();
+    }
+    catch (IOException e) {
+      Log.e(TAG, "cannot access music file!");
+      e.printStackTrace();
+    }
+
+    Log.d(TAG, "Starting playback!");
     mPlayer.start();
+
+    mPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+      @Override
+      public void onCompletion(MediaPlayer mp) {
+        Log.d(TAG, "Stopping playback!");
+        mp.stop();
+        mp.release();
+      }
+    });
   }
-    
     
   private void buyLuck(String sku) {
     if (mBillingService.requestPurchase(sku, androidID)) {
@@ -399,41 +474,107 @@ public class FullscreenActivity extends Activity {
     }
   }
 
-    
-//    private String downloadString(String fileUrl) {
-//    	
-//        URL myFileUrl = null;
-//        String newString = "";
-//        
-//        try {
-//             myFileUrl= new URL(fileUrl);
-//        } catch (MalformedURLException e) {
-//             // TODO Auto-generated catch block
-//             e.printStackTrace();
-//        }
-//        
-//        try {
-//        	HttpURLConnection conn =
-//        		(HttpURLConnection) myFileUrl.openConnection();
-//        	conn.setDoInput(true);
-//            conn.setRequestProperty("User-Agent",
-//             	"com.ziquid.uslce luckloader");
-//            conn.connect();
-////             int length = conn.getContentLength();
-//            InputStream is = conn.getInputStream();
-//          
-//            newString = new Scanner(is).useDelimiter("\\A").next(); 
-//            // convert to String
-//             
-//        } catch (IOException e) {
-//             // TODO Auto-generated catch block
-//             e.printStackTrace();
-//        }
-//        
-//        return newString;
-//        
-//    }
-    
+  static class DownloadFileAsync extends AsyncTask<String, String, String> {
+
+    @Override
+    protected String doInBackground(String... params) {
+      int count;
+
+      String dlDirname = params[0];
+      String outputFilename = getDlFileName(dlDirname, params[1]);
+
+      try {
+        URL url = new URL(params[1]);
+        URLConnection conexion = url.openConnection();
+        conexion.connect();
+        int lengthOfFile = conexion.getContentLength();
+        Log.d(TAG, "Length of file: " + lengthOfFile);
+
+        InputStream input = new BufferedInputStream(url.openStream());
+        OutputStream output = new FileOutputStream(outputFilename);
+        byte data[] = new byte[1024];
+
+        while ((count = input.read(data)) != -1) {
+          output.write(data, 0, count);
+        }
+
+        output.flush();
+        output.close();
+        input.close();
+        Log.d(TAG, "download finished");
+      }
+      catch (Exception e) {
+        e.printStackTrace();
+        Log.e(TAG, "download ERROR");
+        File outputFile = new File(outputFilename);
+        outputFile.delete();
+        return null;
+      }
+
+      return outputFilename;
+    }
+
+    @Override
+    protected void onPostExecute(String result) {
+      Log.d(TAG, "onPostExecute: " + result);
+      playLocalMusic(result);
+    }
+
+  }
+
+  private static String getDlFileName(String dlDirname, String url) {
+    String outputFilename = dlDirname + File.separator +
+      getBaseName(url).replaceAll("%20", "-")
+      .replaceAll(" ", "-");
+    Log.d(TAG, "outputFilename is " + outputFilename);
+    return outputFilename;
+  }
+
+  private String downloadAsString(String fileUrl) {
+
+    URL myFileUrl = null;
+    String newString = "";
+
+    try {
+      myFileUrl = new URL(fileUrl);
+    }
+    catch (MalformedURLException e) {
+      e.printStackTrace();
+    }
+
+    try {
+      HttpURLConnection conn =
+        (HttpURLConnection) myFileUrl.openConnection();
+      conn.setDoInput(true);
+      conn.setRequestProperty("User-Agent",
+        "com.ziquid.uslce luckloader");
+      conn.connect();
+//      int length = conn.getContentLength();
+      InputStream is = conn.getInputStream();
+      newString = new Scanner(is).useDelimiter("\\A").next();
+    }
+    catch (IOException e) {
+      e.printStackTrace();
+    }
+
+    return newString;
+  }
+
+  public static String getBaseName(Uri uri) {
+    try {
+      String path = uri.getLastPathSegment();
+      return path != null ? path.substring(path.lastIndexOf("/") + 1) : "unknown";
+    }
+    catch (Exception e) {
+      e.printStackTrace();
+    }
+
+    return "unknown";
+  }
+
+  public static String getBaseName(String uri) {
+    return getBaseName(Uri.parse(uri));
+  }
     
   private class MyWebViewClient extends WebViewClient {
 
@@ -461,14 +602,22 @@ public class FullscreenActivity extends Activity {
     public void onPageFinished(WebView view, String url) {
       Log.d(TAG, "page has finished loading for URL " + url);
       super.onPageFinished(view, url);
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-        view.evaluateJavascript("(function() { return 'this'; })();", new ValueCallback<String>() {
-          @Override
-          public void onReceiveValue(String s) {
-            Log.d(TAG, s); // Prints: "this"
-          }
+      view.evaluateJavascript("if (typeof Drupal == 'object') {" +
+          "(function(ds) { " +
+          "if (typeof ds && typeof ds.zg.sound) {" +
+          "  return ds.zg.sound;" +
+          "} })(Drupal.settings);" +
+        "}",
+        new ValueCallback<String>() {
+        @Override
+        public void onReceiveValue(String s) {
+          if (s.equals("null")) { return; }
+          Log.d(TAG, "Url to play: " + s);
+          s = StringTrimmer.trim(s, '"');
+          s = s.replaceAll(" ", "%20");
+          playMusic(s);
+        }
         });
-      }
     }
 
   }
@@ -547,3 +696,27 @@ class MyPurchaseObserver extends PurchaseObserver {
 	}
 	
 }
+
+/**
+ * Trim strings.
+ *
+ * @see https://stackoverflow.com/questions/25691415/java-trim-leading-or-trailing-characters-from-a-string
+ */
+class StringTrimmer {
+  public static String trim(String string, char ch) {
+    return trim(string, ch, ch);
+  }
+
+  public static String trim(String string, char leadingChar, char trailingChar) {
+    return string.replaceAll("^["+leadingChar+"]+|["+trailingChar+"]+$", "");
+  }
+
+  public static String trim(String string, String regex) {
+    return trim(string, regex, regex);
+  }
+
+  public static String trim(String string, String leadingRegex, String trailingRegex) {
+    return string.replaceAll("^("+leadingRegex+")+|("+trailingRegex+")+$", "");
+  }
+}
+
